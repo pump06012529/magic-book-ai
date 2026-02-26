@@ -111,6 +111,7 @@ export default function App() {
       localStorage.setItem('GEMINI_API_KEY', manualKey.trim());
       setHasKey(true);
       setShowKeyInput(false);
+      setManualKey('');
     }
   };
 
@@ -208,6 +209,12 @@ export default function App() {
           <div className="mt-4 text-xs text-green-600 flex items-center gap-1 mx-auto justify-center">
             <CheckCircle2 size={12} />
             กำลังใช้งานด้วย API Key ส่วนตัว
+            <button 
+              onClick={() => setShowKeyInput(true)}
+              className="ml-2 text-stone-400 hover:text-orange-500 underline transition-colors"
+            >
+              แก้ไข
+            </button>
           </div>
         )}
       </motion.div>
@@ -575,7 +582,16 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-[#fdfbf7] selection:bg-orange-100 selection:text-orange-900">
+    <div className="min-h-screen bg-[#fdfbf7] selection:bg-orange-100 selection:text-orange-900 relative">
+      {/* Global Settings Button */}
+      <button 
+        onClick={() => setShowKeyInput(true)}
+        className="fixed top-4 right-4 z-40 p-2 bg-white/80 backdrop-blur-md border border-stone-200 rounded-full text-stone-400 hover:text-orange-500 hover:border-orange-200 transition-all shadow-sm"
+        title="ตั้งค่า API Key"
+      >
+        <Settings2 size={20} />
+      </button>
+
       <main className="container mx-auto py-8">
         {step === 'config' && renderConfig()}
         {step === 'generating' && renderGenerating()}
@@ -595,7 +611,9 @@ export default function App() {
               <div className="w-12 h-12 bg-orange-100 text-orange-600 rounded-full flex items-center justify-center mb-6">
                 <Settings2 size={24} />
               </div>
-              <h2 className="text-2xl font-bold text-stone-800 mb-2">กรุณาใส่ Gemini API Key</h2>
+              <h2 className="text-2xl font-bold text-stone-800 mb-2">
+                {localStorage.getItem('GEMINI_API_KEY') ? 'แก้ไข Gemini API Key' : 'กรุณาใส่ Gemini API Key'}
+              </h2>
               <p className="text-stone-500 text-sm mb-6">
                 เนื่องจากคุณไม่ได้ใช้งานผ่าน AI Studio คุณจำเป็นต้องระบุ API Key เพื่อใช้งานระบบสร้างนิทาน (คีย์จะถูกเก็บไว้ในเบราว์เซอร์ของคุณเท่านั้น)
               </p>
@@ -615,6 +633,19 @@ export default function App() {
                 >
                   บันทึกและใช้งาน
                 </button>
+                {localStorage.getItem('GEMINI_API_KEY') && (
+                  <button 
+                    onClick={() => {
+                      localStorage.removeItem('GEMINI_API_KEY');
+                      setHasKey(false);
+                      setShowKeyInput(false);
+                    }}
+                    className="px-4 py-3 bg-red-50 text-red-600 rounded-xl font-bold hover:bg-red-100 transition-all"
+                    title="ลบคีย์ที่บันทึกไว้"
+                  >
+                    ลบคีย์
+                  </button>
+                )}
                 <button 
                   onClick={() => setShowKeyInput(false)}
                   className="px-6 py-3 bg-stone-100 text-stone-600 rounded-xl font-bold hover:bg-stone-200 transition-all"
