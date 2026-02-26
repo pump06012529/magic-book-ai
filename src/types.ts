@@ -1,5 +1,5 @@
 export type ArtStyle = 'watercolor' | 'cartoon' | 'realistic' | 'oil-painting' | 'sketch' | '3d-render';
-export type PaperSize = '1:1' | '3:4' | '4:3';
+export type PaperSize = '1:1' | '3:4' | '4:3' | 'A4-Portrait' | 'A4-Landscape';
 export type Genre = 'fantasy' | 'adventure' | 'bedtime' | 'educational' | 'fable';
 
 export interface BookConfig {

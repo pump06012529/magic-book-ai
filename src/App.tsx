@@ -137,22 +137,31 @@ export default function App() {
 
       const updatedBook = { ...storyStructure };
       
+      // Map paper size to Gemini supported aspect ratios
+      const getGeminiAspectRatio = (size: PaperSize): "1:1" | "3:4" | "4:3" => {
+        if (size === 'A4-Portrait') return '3:4';
+        if (size === 'A4-Landscape') return '4:3';
+        return size as "1:1" | "3:4" | "4:3";
+      };
+
+      const geminiSize = getGeminiAspectRatio(config.paperSize);
+
       // Front Cover
       const frontPrompt = `${updatedBook.frontCover.imagePrompt}, ${config.artStyle} style, high quality, children's book illustration, ${config.characterConsistency ? updatedBook.characterVisualProfile : ''}`;
-      updatedBook.frontCover.imageUrl = await generateImage(frontPrompt, config.paperSize);
+      updatedBook.frontCover.imageUrl = await generateImage(frontPrompt, geminiSize);
       setGenStatus(prev => ({ ...prev, progress: 1, currentTask: 'วาดหน้าปกเสร็จแล้ว...' }));
 
       // Pages
       for (let i = 0; i < updatedBook.pages.length; i++) {
         const page = updatedBook.pages[i];
         const pagePrompt = `${page.imagePrompt}, ${config.artStyle} style, high quality, children's book illustration, ${config.characterConsistency ? updatedBook.characterVisualProfile : ''}`;
-        page.imageUrl = await generateImage(pagePrompt, config.paperSize);
+        page.imageUrl = await generateImage(pagePrompt, geminiSize);
         setGenStatus(prev => ({ ...prev, progress: i + 2, currentTask: `กำลังวาดหน้าที่ ${i + 1}...` }));
       }
 
       // Back Cover
       const backPrompt = `${updatedBook.backCover.imagePrompt}, ${config.artStyle} style, high quality, children's book illustration, minimalist, ${config.characterConsistency ? updatedBook.characterVisualProfile : ''}`;
-      updatedBook.backCover.imageUrl = await generateImage(backPrompt, config.paperSize);
+      updatedBook.backCover.imageUrl = await generateImage(backPrompt, geminiSize);
       
       setBook(updatedBook);
       setGenStatus({ stage: 'done', progress: totalImages, total: totalImages, currentTask: 'เสร็จสมบูรณ์!' });
@@ -191,21 +200,29 @@ export default function App() {
     setIsGeneratingPDF(true);
     
     try {
+      const isLandscape = config.paperSize === '4:3' || config.paperSize === 'A4-Landscape';
+      const isA4 = config.paperSize.startsWith('A4');
+      
       const pdf = new jsPDF({
-        orientation: config.paperSize === '4:3' ? 'landscape' : 'portrait',
-        unit: 'px',
-        format: config.paperSize === '1:1' ? [800, 800] : config.paperSize === '3:4' ? [600, 800] : [800, 600]
+        orientation: isLandscape ? 'landscape' : 'portrait',
+        unit: 'mm',
+        format: isA4 ? 'a4' : [200, 200] // Default to 200x200mm for square/others
       });
 
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
 
       // Create a temporary container for rendering pages
+      // We'll use a larger pixel size for better quality, then scale it to fit the PDF
+      const renderWidth = 1200; 
+      const renderHeight = renderWidth * (pageHeight / pageWidth);
+
       const container = document.createElement('div');
       container.style.position = 'fixed';
       container.style.left = '-9999px';
       container.style.top = '0';
-      container.style.width = `${pageWidth}px`;
+      container.style.width = `${renderWidth}px`;
+      container.style.height = `${renderHeight}px`;
       document.body.appendChild(container);
 
       const renderPageToPDF = async (index: number) => {
@@ -216,28 +233,28 @@ export default function App() {
 
         // Create HTML for this page
         container.innerHTML = `
-          <div style="width: ${pageWidth}px; height: ${pageHeight}px; background: white; display: flex; flex-direction: column; font-family: sans-serif;">
+          <div style="width: ${renderWidth}px; height: ${renderHeight}px; background: white; display: flex; flex-direction: column; font-family: 'Sarabun', sans-serif;">
             <div style="flex: 1; position: relative; overflow: hidden; background: #f5f5f5;">
               <img src="${isFront ? book.frontCover.imageUrl : isBack ? book.backCover.imageUrl : pageData?.imageUrl}" 
                    style="width: 100%; height: 100%; object-fit: cover;" />
             </div>
-            <div style="padding: 40px; text-align: center; border-top: 1px solid #eee;">
-              <h2 style="margin: 0; color: #333; font-size: 24px;">
+            <div style="padding: 60px; text-align: center; border-top: 2px solid #eee; background: white;">
+              <h2 style="margin: 0; color: #333; font-size: 36px; line-height: 1.4;">
                 ${isFront ? book.title : isBack ? book.backCover.text : pageData?.text}
               </h2>
-              ${isFront ? '<p style="margin-top: 10px; color: #999;">เรื่องและภาพโดย Magic AI</p>' : ''}
-              <p style="margin-top: 20px; color: #ccc; font-size: 12px;">หน้า ${index + 1} / ${totalPages}</p>
+              ${isFront ? '<p style="margin-top: 15px; color: #666; font-size: 20px;">เรื่องและภาพโดย Magic AI</p>' : ''}
+              <p style="margin-top: 30px; color: #999; font-size: 16px;">หน้า ${index + 1} / ${totalPages}</p>
             </div>
           </div>
         `;
 
         const canvas = await html2canvas(container, {
           useCORS: true,
-          scale: 2,
+          scale: 1, // We already set a large render size
           logging: false
         });
         
-        const imgData = canvas.toDataURL('image/jpeg', 0.95);
+        const imgData = canvas.toDataURL('image/jpeg', 0.9);
         if (index > 0) pdf.addPage();
         pdf.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight);
       };
@@ -374,19 +391,22 @@ export default function App() {
 
               <div>
                 <label className="block text-sm font-medium text-stone-600 mb-1">ขนาดกระดาษ</label>
-                <div className="flex gap-4">
-                  {(['1:1', '3:4', '4:3'] as PaperSize[]).map((size) => (
+                <div className="grid grid-cols-2 gap-2">
+                  {(['1:1', '3:4', '4:3', 'A4-Portrait', 'A4-Landscape'] as PaperSize[]).map((size) => (
                     <button
                       key={size}
                       onClick={() => setConfig({...config, paperSize: size})}
                       className={cn(
-                        "flex-1 py-2 rounded-lg border transition-all text-sm",
+                        "py-2 rounded-lg border transition-all text-xs",
                         config.paperSize === size 
                           ? "bg-orange-50 border-orange-200 text-orange-700 font-medium" 
                           : "border-stone-100 text-stone-500 hover:bg-stone-50"
                       )}
                     >
-                      {size === '1:1' ? 'จัตุรัส' : size === '3:4' ? 'แนวตั้ง' : 'แนวนอน'}
+                      {size === '1:1' ? 'จัตุรัส (1:1)' : 
+                       size === '3:4' ? 'แนวตั้ง (3:4)' : 
+                       size === '4:3' ? 'แนวนอน (4:3)' :
+                       size === 'A4-Portrait' ? 'A4 แนวตั้ง' : 'A4 แนวนอน'}
                     </button>
                   ))}
                 </div>
@@ -527,8 +547,10 @@ export default function App() {
 
     const getAspectRatioClass = () => {
       switch(config.paperSize) {
-        case '3:4': return 'aspect-[3/4]';
-        case '4:3': return 'aspect-[4/3]';
+        case '3:4': 
+        case 'A4-Portrait': return 'aspect-[3/4]';
+        case '4:3': 
+        case 'A4-Landscape': return 'aspect-[4/3]';
         default: return 'aspect-square';
       }
     };

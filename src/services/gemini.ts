@@ -19,6 +19,10 @@ export async function generateStoryStructure(config: BookConfig, retries = 3): P
   ตัวละครหลัก: ${config.mainCharacterDesc}
   เพิ่มเติม: ${config.additionalNotes}
   
+  คำสั่งสำคัญ:
+  - เนื้อเรื่อง (title, text, backCover.text) ต้องเป็นภาษาไทยเท่านั้น
+  - imagePrompt ต้องเป็นภาษาอังกฤษเท่านั้น และอธิบายสไตล์ ${config.artStyle} อย่างชัดเจน
+  
   กรุณาตอบกลับเป็น JSON ตามโครงสร้างที่กำหนด โดยต้องมี:
   1. title: ชื่อเรื่องที่น่าสนใจ
   2. characterVisualProfile: คำอธิบายลักษณะทางกายภาพของตัวละครหลักอย่างละเอียด (เพื่อความคงที่ของภาพ)
