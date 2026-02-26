@@ -158,11 +158,14 @@ export default function App() {
       console.error(error);
       const errorStr = error.message || error.toString();
       const isQuotaError = errorStr.includes('quota') || errorStr.includes('429') || errorStr.includes('limit');
+      const isHighDemand = errorStr.includes('503') || errorStr.includes('high demand');
       const isSafetyError = errorStr.includes('SAFETY_FILTER');
       
       let message = 'เกิดข้อผิดพลาดในการสื่อสารกับ AI กรุณาลองใหม่อีกครั้ง';
       if (isQuotaError) {
         message = 'ขออภัย คุณใช้งานเกิน 5 ครั้งต่อนาที (Rate Limit) ระบบกำลังรอคิวให้ว่าง กรุณารอประมาณ 30 วินาทีแล้วกด "ลองใหม่อีกครั้ง"';
+      } else if (isHighDemand) {
+        message = 'ขออภัย ขณะนี้มีผู้ใช้งาน Gemini จำนวนมาก (High Demand) ทำให้ระบบติดขัดชั่วคราว กรุณารอประมาณ 10-20 วินาทีแล้วกด "ลองใหม่อีกครั้ง"';
       } else if (isSafetyError) {
         message = 'เนื้อหาบางส่วนถูกระงับโดยระบบความปลอดภัยของ AI (Safety Filter) กรุณาลองปรับคำอธิบายตัวละครให้เรียบง่ายขึ้น';
       }

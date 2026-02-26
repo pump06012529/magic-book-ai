@@ -9,7 +9,7 @@ function getApiKey() {
   }
 }
 
-export async function generateStoryStructure(config: BookConfig): Promise<StoryBook> {
+export async function generateStoryStructure(config: BookConfig, retries = 3): Promise<StoryBook> {
   const ai = new GoogleGenAI({ apiKey: getApiKey() });
   const model = "gemini-flash-lite-latest";
   
@@ -28,51 +28,68 @@ export async function generateStoryStructure(config: BookConfig): Promise<StoryB
   
   หมายเหตุ: imagePrompt ต้องเป็นภาษาอังกฤษและอธิบายสไตล์ ${config.artStyle} อย่างชัดเจน`;
 
-  const response = await ai.models.generateContent({
-    model,
-    contents: prompt,
-    config: {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          title: { type: Type.STRING },
-          characterVisualProfile: { type: Type.STRING },
-          frontCover: {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const response = await ai.models.generateContent({
+        model,
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
             type: Type.OBJECT,
             properties: {
               title: { type: Type.STRING },
-              imagePrompt: { type: Type.STRING }
-            },
-            required: ["title", "imagePrompt"]
-          },
-          pages: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                pageNumber: { type: Type.INTEGER },
-                text: { type: Type.STRING },
-                imagePrompt: { type: Type.STRING }
+              characterVisualProfile: { type: Type.STRING },
+              frontCover: {
+                type: Type.OBJECT,
+                properties: {
+                  title: { type: Type.STRING },
+                  imagePrompt: { type: Type.STRING }
+                },
+                required: ["title", "imagePrompt"]
               },
-              required: ["pageNumber", "text", "imagePrompt"]
-            }
-          },
-          backCover: {
-            type: Type.OBJECT,
-            properties: {
-              text: { type: Type.STRING },
-              imagePrompt: { type: Type.STRING }
+              pages: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    pageNumber: { type: Type.INTEGER },
+                    text: { type: Type.STRING },
+                    imagePrompt: { type: Type.STRING }
+                  },
+                  required: ["pageNumber", "text", "imagePrompt"]
+                }
+              },
+              backCover: {
+                type: Type.OBJECT,
+                properties: {
+                  text: { type: Type.STRING },
+                  imagePrompt: { type: Type.STRING }
+                },
+                required: ["text", "imagePrompt"]
+              }
             },
-            required: ["text", "imagePrompt"]
+            required: ["title", "characterVisualProfile", "frontCover", "pages", "backCover"]
           }
-        },
-        required: ["title", "characterVisualProfile", "frontCover", "pages", "backCover"]
-      }
-    }
-  });
+        }
+      });
 
-  return JSON.parse(response.text || "{}");
+      return JSON.parse(response.text || "{}");
+    } catch (error: any) {
+      const errorMsg = error.message || error.toString();
+      const isHighDemand = errorMsg.includes('503') || errorMsg.includes('high demand');
+      const isQuotaError = errorMsg.includes('quota') || errorMsg.includes('429') || errorMsg.includes('limit');
+      
+      console.warn(`Story generation attempt ${i + 1} failed:`, errorMsg);
+      
+      if (i === retries - 1) throw error;
+      
+      const waitTime = (isHighDemand || isQuotaError) ? 10000 * (i + 1) : 2000 * (i + 1);
+      await delay(waitTime);
+    }
+  }
+  
+  throw new Error("Failed to generate story structure after retries");
 }
 
 async function delay(ms: number) {
@@ -113,14 +130,15 @@ export async function generateImage(prompt: string, aspectRatio: "1:1" | "3:4" |
 
     } catch (error: any) {
       const errorMsg = error.message || error.toString();
+      const isHighDemand = errorMsg.includes('503') || errorMsg.includes('high demand');
       const isQuotaError = errorMsg.includes('quota') || errorMsg.includes('429') || errorMsg.includes('limit');
       
       console.warn(`Image generation attempt ${i + 1} failed:`, errorMsg);
       
       if (i === retries - 1) throw error;
       
-      // If it's a rate limit error, wait much longer to reset the 1-minute window
-      const waitTime = isQuotaError ? 15000 * (i + 1) : 3000 * (i + 1);
+      // If it's a rate limit or high demand error, wait much longer
+      const waitTime = (isQuotaError || isHighDemand) ? 15000 * (i + 1) : 3000 * (i + 1);
       await delay(waitTime);
     }
   }
