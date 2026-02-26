@@ -83,6 +83,9 @@ export async function generateImage(prompt: string, aspectRatio: "1:1" | "3:4" |
   const ai = new GoogleGenAI({ apiKey: getApiKey() });
   const model = "gemini-2.5-flash-image";
   
+  // Add a small initial delay to help stay under 5 RPM (12s per request)
+  await delay(2000);
+
   for (let i = 0; i < retries; i++) {
     try {
       const response = await ai.models.generateContent({
@@ -102,16 +105,22 @@ export async function generateImage(prompt: string, aspectRatio: "1:1" | "3:4" |
           return `data:image/png;base64,${part.inlineData.data}`;
         }
       }
+      
+      // If no image data but no error, it might be a safety filter
+      if (response.candidates?.[0]?.finishReason === 'SAFETY') {
+        throw new Error("SAFETY_FILTER: เนื้อหาภาพถูกระงับเนื่องจากนโยบายความปลอดภัย ลองปรับคำอธิบายตัวละครใหม่");
+      }
+
     } catch (error: any) {
       const errorMsg = error.message || error.toString();
-      const isQuotaError = errorMsg.includes('quota') || errorMsg.includes('429');
+      const isQuotaError = errorMsg.includes('quota') || errorMsg.includes('429') || errorMsg.includes('limit');
       
       console.warn(`Image generation attempt ${i + 1} failed:`, errorMsg);
       
       if (i === retries - 1) throw error;
       
-      // If it's a quota error, wait significantly longer (10s, 20s, 30s)
-      const waitTime = isQuotaError ? 10000 * (i + 1) : 2000 * (i + 1);
+      // If it's a rate limit error, wait much longer to reset the 1-minute window
+      const waitTime = isQuotaError ? 15000 * (i + 1) : 3000 * (i + 1);
       await delay(waitTime);
     }
   }

@@ -156,15 +156,23 @@ export default function App() {
       setTimeout(() => setStep('viewing'), 1000);
     } catch (error: any) {
       console.error(error);
-      const isQuotaError = error.message?.includes('quota') || error.toString().includes('quota');
+      const errorStr = error.message || error.toString();
+      const isQuotaError = errorStr.includes('quota') || errorStr.includes('429') || errorStr.includes('limit');
+      const isSafetyError = errorStr.includes('SAFETY_FILTER');
+      
+      let message = 'เกิดข้อผิดพลาดในการสื่อสารกับ AI กรุณาลองใหม่อีกครั้ง';
+      if (isQuotaError) {
+        message = 'ขออภัย คุณใช้งานเกิน 5 ครั้งต่อนาที (Rate Limit) ระบบกำลังรอคิวให้ว่าง กรุณารอประมาณ 30 วินาทีแล้วกด "ลองใหม่อีกครั้ง"';
+      } else if (isSafetyError) {
+        message = 'เนื้อหาบางส่วนถูกระงับโดยระบบความปลอดภัยของ AI (Safety Filter) กรุณาลองปรับคำอธิบายตัวละครให้เรียบง่ายขึ้น';
+      }
+
       setGenStatus({ 
         stage: 'error', 
         progress: 0, 
         total: 0, 
         currentTask: 'เกิดข้อผิดพลาด',
-        errorMessage: isQuotaError 
-          ? 'ขออภัย โควต้าการใช้งานฟรีของคุณเต็มแล้ว กรุณารอประมาณ 1 นาทีแล้วลองใหม่ หรือใช้ API Key ของคุณเองเพื่อโควต้าที่สูงขึ้น' 
-          : 'เกิดข้อผิดพลาดในการสื่อสารกับ AI กรุณาลองใหม่อีกครั้ง'
+        errorMessage: message
       });
     }
   };
