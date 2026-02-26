@@ -18,8 +18,11 @@ import {
   Wand2,
   Settings2,
   Loader2,
-  CheckCircle2
+  CheckCircle2,
+  FileDown
 } from 'lucide-react';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 import { BookConfig, StoryBook, Genre, ArtStyle, PaperSize } from './types';
 import { generateStoryStructure, generateImage } from './services/gemini';
 import { clsx, type ClassValue } from 'clsx';
@@ -178,6 +181,79 @@ export default function App() {
         currentTask: 'เกิดข้อผิดพลาด',
         errorMessage: message
       });
+    }
+  };
+
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+
+  const downloadAsPDF = async () => {
+    if (!book) return;
+    setIsGeneratingPDF(true);
+    
+    try {
+      const pdf = new jsPDF({
+        orientation: config.paperSize === '4:3' ? 'landscape' : 'portrait',
+        unit: 'px',
+        format: config.paperSize === '1:1' ? [800, 800] : config.paperSize === '3:4' ? [600, 800] : [800, 600]
+      });
+
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+
+      // Create a temporary container for rendering pages
+      const container = document.createElement('div');
+      container.style.position = 'fixed';
+      container.style.left = '-9999px';
+      container.style.top = '0';
+      container.style.width = `${pageWidth}px`;
+      document.body.appendChild(container);
+
+      const renderPageToPDF = async (index: number) => {
+        const isFront = index === 0;
+        const isBack = index === totalPages - 1;
+        const pageIndex = index - 1;
+        const pageData = !isFront && !isBack ? book.pages[pageIndex] : null;
+
+        // Create HTML for this page
+        container.innerHTML = `
+          <div style="width: ${pageWidth}px; height: ${pageHeight}px; background: white; display: flex; flex-direction: column; font-family: sans-serif;">
+            <div style="flex: 1; position: relative; overflow: hidden; background: #f5f5f5;">
+              <img src="${isFront ? book.frontCover.imageUrl : isBack ? book.backCover.imageUrl : pageData?.imageUrl}" 
+                   style="width: 100%; height: 100%; object-fit: cover;" />
+            </div>
+            <div style="padding: 40px; text-align: center; border-top: 1px solid #eee;">
+              <h2 style="margin: 0; color: #333; font-size: 24px;">
+                ${isFront ? book.title : isBack ? book.backCover.text : pageData?.text}
+              </h2>
+              ${isFront ? '<p style="margin-top: 10px; color: #999;">เรื่องและภาพโดย Magic AI</p>' : ''}
+              <p style="margin-top: 20px; color: #ccc; font-size: 12px;">หน้า ${index + 1} / ${totalPages}</p>
+            </div>
+          </div>
+        `;
+
+        const canvas = await html2canvas(container, {
+          useCORS: true,
+          scale: 2,
+          logging: false
+        });
+        
+        const imgData = canvas.toDataURL('image/jpeg', 0.95);
+        if (index > 0) pdf.addPage();
+        pdf.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight);
+      };
+
+      // Process all pages
+      for (let i = 0; i < totalPages; i++) {
+        await renderPageToPDF(i);
+      }
+
+      pdf.save(`${book.title || 'magic-book'}.pdf`);
+      document.body.removeChild(container);
+    } catch (error) {
+      console.error("PDF Generation Error:", error);
+      alert("เกิดข้อผิดพลาดในการสร้าง PDF กรุณาลองใหม่อีกครั้ง");
+    } finally {
+      setIsGeneratingPDF(false);
     }
   };
 
@@ -471,11 +547,16 @@ export default function App() {
             หน้า {currentPage + 1} / {totalPages}
           </div>
           <button 
-            onClick={() => window.print()}
-            className="flex items-center gap-2 text-orange-600 hover:text-orange-700 transition-colors"
+            onClick={downloadAsPDF}
+            disabled={isGeneratingPDF}
+            className="flex items-center gap-2 text-orange-600 hover:text-orange-700 transition-colors disabled:opacity-50"
           >
-            <Download size={18} />
-            พิมพ์ / บันทึก
+            {isGeneratingPDF ? (
+              <Loader2 size={18} className="animate-spin" />
+            ) : (
+              <FileDown size={18} />
+            )}
+            {isGeneratingPDF ? 'กำลังสร้าง PDF...' : 'ดาวน์โหลด PDF (เล่มเดียวจบ)'}
           </button>
         </div>
 
